@@ -30,58 +30,36 @@ namespace PrimeNumberFinder
 
         private void InitializeTimer()
         {
-            timer = new System.Windows.Forms.Timer();
-            timer.Interval = 100; // Update UI every 100 milliseconds
+            timer = new System.Windows.Forms.Timer
+            {
+                Interval = 1000 // Update UI every 100 milliseconds
+            };
             timer.Tick += Timer_Tick;
         }
 
-        private async void Button1_Click(object sender, EventArgs e)
+        private void Button1_Click(object sender, EventArgs e)
         {
-            await FindPrimesAsync(textBox1, listBox1);
+            FindPrimes(textBox1, listBox1);
         }
 
-        private async void Button2_Click(object sender, EventArgs e)
+        private void Button2_Click(object sender, EventArgs e)
         {
-            await FindPrimesAsync(textBox2, listBox2);
+            FindPrimes(textBox2, listBox2);
         }
 
-        private async Task FindPrimesAsync(TextBox textBox, ListBox listBox)
+        private void FindPrimes(TextBox textBox, ListBox listBox)
         {
             if (int.TryParse(textBox.Text, out int limit))
             {
-                var cancellationTokenSource = new CancellationTokenSource();
-                var cancellationToken = cancellationTokenSource.Token;
+                progressBar1.Value = 0;
+                progressBar1.Maximum = limit;
 
-                try
-                {
-                    progressBar1.Value = 0;
-                    progressBar1.Maximum = limit;
+                timer.Start(); // Starts the timer
 
-                    timer.Start(); // Starts the timer
 
-                    var progress = new Progress<int>(percent =>
-                    {
-                        // Updates progress bar
-                        progressBar1.Value = Math.Min(percent, progressBar1.Maximum);
-                    });
 
-                    List<int> primes = await Task.Run(() => FindPrimes(limit, progress, cancellationToken), cancellationToken);
-
-                    // Updates UI with prime numbers.
-                    listBox.Items.Clear();
-                    foreach (int prime in primes)
-                    {
-                        listBox.Items.Add(prime);
-                    }
-                }
-                catch (OperationCanceledException)
-                {
-                    MessageBox.Show("Prime number search was canceled.");
-                }
-                finally
-                {
-                    timer.Stop(); // Stops the timer when the operation completes
-                }
+                var thread = new Thread(() => FindPrimesWorker(limit, listBox));
+                thread.Start();
             }
             else
             {
@@ -89,74 +67,48 @@ namespace PrimeNumberFinder
             }
         }
 
-        private List<int> FindPrimes(int limit, IProgress<int> progress, CancellationToken cancellationToken)
+        private void FindPrimesWorker(int limit, ListBox listBox)
         {
-            List<int> primes = new List<int>();
+            bool[] primes = new bool[limit + 1];
             for (int i = 2; i <= limit; i++)
             {
-                if (cancellationToken.IsCancellationRequested)
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-                }
-
-                if (IsPrime(i))
-                {
-                    primes.Add(i);
-                }
-
-                // Report progress.
-                int percentComplete = (int)((double)i / limit * 100);
-                progress.Report(percentComplete);
+                primes[i] = true;
             }
-            return primes;
-        }
 
-        
-
-
-        private void Form1_Load(int limit, ListBox resultListBox, IProgress<int> progress, CancellationToken cancellationToken)
-        {
-            List<int> primes = new List<int>();
-            for (int i = 2; i <= limit; i++)
+            for (int p = 2; p * p <= limit; p++)
             {
-                if (cancellationToken.IsCancellationRequested)
+                if (primes[p] == true)
                 {
-                    cancellationToken.ThrowIfCancellationRequested();
+                    for (int i = p * p; i <= limit; i += p)
+                    {
+                        primes[i] = false;
+                    }
                 }
-
-                if (IsPrime(i))
-                {
-                    primes.Add(i);
-                }
-
-                // Reports progress.
-                int percentComplete = (int)((double)i / limit * 100);
-                progress.Report(percentComplete);
+                // Calculate progress and update the progress bar
+                int percentComplete = (int)(((double)p * p / limit) * 100);
+                progressBar1.Invoke((MethodInvoker)delegate {
+                    progressBar1.Value = Math.Min(percentComplete, progressBar1.Maximum);
+                });
             }
+
+
 
             // Updates UI with prime numbers.
-            resultListBox.Invoke((MethodInvoker)delegate {
-                resultListBox.Items.Clear();
-                foreach (int prime in primes)
+            listBox.Invoke((MethodInvoker)delegate {
+                listBox.Items.Clear();
+                for (int i = 2; i <= limit; i++)
                 {
-                    resultListBox.Items.Add(prime);
+                    if (primes[i])
+                    {
+                        listBox.Items.Add(i);
+                    }
                 }
             });
+
+            timer.Stop(); // Stops the timer when the operation completes
         }
 
-        private bool IsPrime(int n)
-        {
-            if (n <= 1) return false;
-            if (n <= 3) return true;
-            if (n % 2 == 0 || n % 3 == 0) return false;
 
-            for (int i = 5; i * i <= n; i += 6)
-            {
-                if (n % i == 0 || n % (i + 2) == 0)
-                    return false;
-            }
-            return true;
-        }
 
         private void Timer_Tick(object sender, EventArgs e)
         {
